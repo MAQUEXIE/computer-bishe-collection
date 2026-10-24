@@ -1,0 +1,87 @@
+# 26 企业绩效考核系统
+
+任务分配、周报提交、360 度绩效评分、结果审核发布、绩效申诉闭环管理。
+
+## 技术栈
+
+- 后端：SpringBoot 2.7.18 + MyBatis + MySQL 8（JDK 8，端口 **9026**）
+- 前端：Vue3 + Vite + Element Plus + Vue Router + Pinia + Axios（端口 **5126**，`/api` 代理到 9026）
+- 数据库：**db_26_performance**（utf8mb4）
+
+## 一键启动
+
+```powershell
+# 1. 建库 + 初始化数据（root/root）
+Get-Content D:\000-计算机项目\30个系统项目\26-企业绩效考核系统\db\init.sql -Raw -Encoding UTF8 | & 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe' --user=root --password=root --default-character-set=utf8mb4
+
+# 2. 启动后端（必须先切 JDK8）
+cd D:\000-计算机项目\30个系统项目\26-企业绩效考核系统\backend
+$env:JAVA_HOME='C:\Program Files\Amazon Corretto\jdk1.8.0_492'; mvn spring-boot:run
+
+# 3. 启动前端（新终端）
+cd D:\000-计算机项目\30个系统项目\26-企业绩效考核系统\frontend
+npm install; npm run dev
+# 浏览器打开 http://localhost:5126
+```
+
+## 预置账号
+
+| 账号 | 密码 | 角色 |
+|---|---|---|
+| admin | 123456 | 管理员（同 HR 权限） |
+| hr | 123456 | HR（考核方案管理 / 结果审核发布 / 汇总报表 / 申诉终审） |
+| manager | 123456 | 主管（任务分配 / 360 评分 / 团队绩效 / 申诉复核） |
+| staff | 123456 | 员工（查看任务 / 提交周报 / 查看绩效 / 申诉 / 自评互评） |
+
+另有 6 名员工（zhangwei/lina/wangqiang/liuyang/chenjing/zhaolei，密码均 123456）；开放注册，新注册员工默认进入技术研发部。
+
+## 创新点实现
+
+1. **360 度评价加权**：HR 配置考核方案权重（自评% + 同事互评% + 主管评分%，校验合计=100），主管点击「计算加权总分」自动合成 `total = 自评*w1 + 同事均分*w2 + 主管分*w3`，按 90/80/70 切 S/A/B/C。
+2. **绩效申诉闭环**：员工对已发布结果申诉 → 主管复核（同意升级 HR / 驳回）→ HR 终审（成立则结果标记「申诉调整」/ 驳回），全程状态机驱动。
+
+## 逐角色功能测试结论（浏览器实测 2026-10-24）
+
+### 员工 staff
+- ✓ 查看任务（看到主管分配的任务，可推进状态）
+- ✓ 提交周报（提交 2026-W44 周报，历史列表即时刷新）
+- ✓ 查看绩效结果（88.6 分 / A / 已发布）
+- ✓ 发起申诉（填写理由提交，进入待主管复核）
+- ✓ 绩效评分待办（完成自评 + 给同事刘洋互评）
+
+### 主管 manager
+- ✓ 分配任务（新任务「完成Q4绩效考核系统验收测试」指派给陈晓，团队列表即时出现）
+- ✓ 绩效评分（360 度页面：自评 + 7 名同事互评 + 7 名下属主管评分；给刘洋提交主管评分）
+- ✓ 查看团队绩效（4 名下属结果：王强73.8/B、李娜82/A、张伟92.2/S、陈晓88.6/A）
+- ✓ 申诉复核（对陈晓申诉填意见 → 同意·升级 HR）
+
+### HR hr
+- ✓ 考核方案管理（新建「2026年第四季度绩效考核方案」权重 20/20/60，列表即时刷新）
+- ✓ 结果审核发布（李娜待审核结果 → 审核发布，状态变已发布）
+- ✓ 汇总报表（员工总数 7、平均 84.2、等级分布 S1/A2/B1/C0、任务完成率明细）
+- ✓ 申诉终审（陈晓申诉：主管已升级 → HR 终审通过 → 状态「申诉成立·已关闭」，结果标记申诉调整）
+
+### 管理员 admin
+- ✓ 登录并进入 HR 工作台（可访问全部 HR 页面）
+
+### 开放注册
+- ✓ 员工注册页注册 newstaff/123456 成功，自动回登录页
+
+## 实测修复的 Bug（已全部修复）
+
+1. **结果/申诉接口字段嵌套未展开**：后端返回 `{result:{...}, userName}`，前端表格直接用 `row.totalScore` 导致等级/状态列空白、申诉按钮禁用。修复：前端 load 时 `map(r=>({...r,...r.result}))`（MyResult/TeamResult/ResultAudit 三页）、申诉页 `map(r=>({...r,...r.appeal,...}))`（AppealReview 页）。
+2. **el-tag 卡在进入动画 class、宽度塌陷为 0**：自动化环境下 `.el-zoom-in-center-enter-from` 不退出，标签渲染宽度 0。修复：App.vue 全局 CSS 强制 `.el-zoom-in-center-enter-from/-active{transform:none!important;opacity:1!important}` 并给 `.el-tag` 固定宽度与 padding。
+3. **主管提交任务残留残缺代码**：初版 Tasks.vue 误留 `request.post('/task/create({')` 占位，重写为完整表单。
+
+## 已知限制
+
+- 评分「重复提交覆盖」实现为删旧插新（t_score 无 update 语句，简单可靠）。
+- 360 互评对象取「同部门同事」，未做跨部门互评。
+- 无登录拦截器白名单（采用无状态 token 由前端 localStorage 携带 userId，与已完成项目 03 一致）。
+- 浏览器视口较窄（939px），实测时页面通过 `document.body.style.zoom` 缩放展示，不影响生产使用。
+
+## 截图清单（screenshots/，MD5 已全量比对无重复）
+
+- 员工/查看任务.png、员工/提交周报.png、员工/查看绩效结果.png、员工/申诉.png
+- 主管/分配任务.png、主管/绩效评分.png、主管/查看团队绩效.png
+- HR/考核方案管理.png、HR/结果审核发布.png、HR/汇总报表.png

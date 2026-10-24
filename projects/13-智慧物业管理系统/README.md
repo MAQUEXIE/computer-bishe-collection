@@ -1,0 +1,111 @@
+# 13 智慧物业管理系统
+
+小区数字化管理平台：报修工单、物业缴费、停车管理、访客门禁、公告投诉，三角色协同闭环。
+
+- 技术栈：SpringBoot 2.7.18 + MyBatis 2.3.2 + MySQL 8 / Vue3 + Vite + Element Plus + Pinia + Axios
+- 后端端口：**9013**　前端端口：**5113**　数据库：**db_13_property**
+
+---
+
+## 一键启动
+
+### 1. 初始化数据库（PowerShell）
+
+```powershell
+Get-Content D:\000-计算机项目\30个系统项目\13-智慧物业管理系统\db\init.sql -Raw -Encoding UTF8 | & 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe' --user=root --password=root --default-character-set=utf8mb4
+```
+
+### 2. 启动后端（必须先切 JDK8）
+
+```powershell
+cd D:\000-计算机项目\30个系统项目\13-智慧物业管理系统\backend
+$env:JAVA_HOME='C:\Program Files\Amazon Corretto\jdk1.8.0_492'
+mvn spring-boot:run
+```
+
+### 3. 启动前端
+
+```powershell
+cd D:\000-计算机项目\30个系统项目\13-智慧物业管理系统\frontend
+npm install
+npm run dev
+```
+
+浏览器打开 http://localhost:5113
+
+---
+
+## 测试账号
+
+| 角色 | 账号 | 密码 | 说明 |
+|---|---|---|---|
+| 管理员 | admin | 123456 | 楼栋房屋管理 / 账目统计 / 权限配置 |
+| 物业 | property | 123456 | 工单接单派单 / 费用账单 / 车位管理 / 公告发布 |
+| 业主 | owner | 123456 | 在线报修 / 物业缴费 / 访客申请 / 投诉建议（绑定 1-101） |
+
+开放注册：业主可在登录页「业主注册」自行注册并选择已入住房屋绑定。
+
+---
+
+## 创新点
+
+1. **报修工单状态机**：PENDING(待派单) → DISPATCHED(已派单) → ACCEPTED(维修中) → FINISHED(待评价) → EVALUATED(已评价)。每一步状态流转由后端 SQL 条件守卫（`WHERE status = '上一状态'`），非法跳转返回错误。
+2. **缴费到期提醒**：业主账单页自动计算每张未缴账单距到期日天数，逾期或 7 天内到期的账单顶部显示黄色提醒横幅，「到期提醒」列标签高亮（逾期红/临期黄）。
+
+---
+
+## 逐角色功能实测结果（2026-10-24 浏览器实测）
+
+### 业主（owner/123456）
+| 功能 | 结果 | 实测操作 |
+|---|---|---|
+| 在线报修 | ✓ | 提交「阳台地漏反味」新工单，列表即时显示；评价工单 id=4（FINISHED→EVALUATED，5星） |
+| 物业缴费 | ✓ | 顶部提醒横幅显示「2笔账单需关注」；缴纳电费 id=2（¥86.2）后提醒数降为 1 |
+| 访客申请 | ✓ | 提交「测试访客」申请（待审批） |
+| 投诉建议 | ✓ | 提交「快递柜充电接口不足」（待回复） |
+
+### 物业（property/123456）
+| 功能 | 结果 | 实测操作 |
+|---|---|---|
+| 工单接单派单 | ✓ | 工单 id=1 PENDING→派单给张管家→DISPATCHED；状态机每步按钮随状态自动出现/隐藏 |
+| 费用账单 | ✓ | 新生成物业费账单（1-101，2026-11，¥120，到期 2026-11-30） |
+| 车位管理 | ✓ | 出租车位 A-003 给张业主，车牌 闽D99999，状态由空闲→已租 |
+| 公告发布 | ✓ | 发布「本周末停电检修通知」，时间线顶部即时显示 |
+
+### 管理员（admin/123456）
+| 功能 | 结果 | 实测操作 |
+|---|---|---|
+| 楼栋房屋管理 | ✓ | 新增楼栋「4栋」（11层），楼栋列表即时刷新 |
+| 账目统计 | ✓ | 12 项统计卡片全部正确渲染（已收/欠费/逾期/房屋/工单/车位/访客/投诉/账户数） |
+| 权限配置 | ✓ | 用户列表加载 5 个账号，保存 admin 角色配置成功 |
+
+---
+
+## 修复的 Bug
+
+1. **MyBatis 动态 SQL `<script>` 标签位置错误**：初版把 `<script>` 放在 FROM 子句之后，导致 SQL 语法错误，工单列表 500。修复为整条 SQL 用 `<script>...</script>` 包裹（影响 RepairMapper / BillMapper / VisitorMapper / ComplaintMapper 4 个 Mapper 的 list 查询）。
+2. **PowerShell `Set-Content -Encoding UTF8` 给文件加 BOM**：4 个被 PowerShell 重写的 Mapper 文件首字符出现 `\ufeff`，Java 编译器报「非法字符」。改用 `[System.IO.File]::WriteAllText` + `UTF8Encoding($false)` 去 BOM。
+
+---
+
+## 已知限制
+
+- 无鉴权 token（仅 localStorage 存用户对象），后端不校验身份；演示项目足够，生产需加 JWT。
+- 缴费为模拟扣款，未接真实支付渠道。
+- 无图片上传，报修/投诉均为文字描述。
+- 访客审批仅物业人工通过/拒绝，未对接真实门禁硬件。
+
+---
+
+## 代码统计
+
+- backend/src：32 个文件（Java 源 27 + application.yml）
+- frontend/src + public：19 个文件（Vue 14 + JS 4 + logo.svg）
+- db：1 个 init.sql
+- **合计 52 个文件**
+
+## 截图清单（screenshots/ 下 11 张，MD5 全部唯一）
+
+- 业主/在线报修.png、物业缴费.png、访客申请.png、投诉建议.png
+- 物业/工单接单派单.png、费用账单.png、车位管理.png、公告发布.png
+- 管理员/楼栋房屋管理.png、账目统计.png、权限配置.png
