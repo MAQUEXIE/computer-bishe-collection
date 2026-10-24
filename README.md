@@ -141,7 +141,7 @@ npm run dev
 - ✍️ 论文不会写？
 - 🎤 答辩紧张不知道说什么？
 
-👉 **加微信：bishe_helper**（备注「毕设」）
+👉 **加微信：hmma2026**（备注「毕设」）
 
 **免费服务：**
 - 免费帮你分析选题建议
@@ -156,7 +156,7 @@ npm run dev
 
 ## 📮 联系方式
 
-- 微信：bishe_helper（备注「毕设」）
+- 微信：hmma2026（备注「毕设」）
 - 展示网站：https://maquexie.github.io/bishe-site/
 - GitHub：https://github.com/MAQUEXIE/computer-bishe-collection
 
